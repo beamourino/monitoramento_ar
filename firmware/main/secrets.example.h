@@ -1,0 +1,8 @@
+#ifndef SECRETS_H
+#define SECRETS_H
+
+#define WIFI_SSID "SEU_WIFI"
+#define WIFI_PASSWORD "SUA_SENHA_WIFI"
+#define THINGSPEAK_WRITE_KEY "SUA_WRITE_API_KEY"
+
+#endif

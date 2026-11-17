@@ -3,11 +3,12 @@
 #include <HTTPClient.h>
 #include <Wire.h>
 #include "Adafruit_SGP30.h"
+#include "secrets.h"
 
-const char* ssid = "SEU_WIFI";
-const char* password = "SUA_SENHA_WIFI";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
-const char* writeAPIKey = "SUA_WRITE_API_KEY";
+const char* writeAPIKey = THINGSPEAK_WRITE_KEY;
 const char* serverName = "https://api.thingspeak.com/update";
 const unsigned long INTERVALO_ENVIO = 20000;
 unsigned long ultimoEnvio = 0;
