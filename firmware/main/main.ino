@@ -60,11 +60,20 @@ void conectarWiFi() {
   }
 }
 
+// Converte o nível interno (0 a 4) em 3 níveis, iguais aos 3 LEDs:
+// 0 = BOA (verde), 1 = MODERADA (amarelo), 2 = RUIM (vermelho)
+int nivelSimplificado(int geral) {
+  if (geral >= NIVEL_VERMELHO) return 2;
+  if (geral >= NIVEL_AMARELO) return 1;
+  return 0;
+}
+
 void enviarThingSpeak(float delta, int geral) {
   if (WiFi.status() != WL_CONNECTED) conectarWiFi();
   if (WiFi.status() != WL_CONNECTED) return;
 
-  int alerta = (geral >= NIVEL_AMARELO) ? 1 : 0;
+  int nivel3 = nivelSimplificado(geral);
+  int alerta = (nivel3 >= 1) ? 1 : 0;
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
@@ -79,7 +88,7 @@ void enviarThingSpeak(float delta, int geral) {
   dados += "&field2=" + String(sgp.TVOC);
   dados += "&field3=" + String(delta, 3);
   dados += "&field4=" + String(alerta);
-  dados += "&field5=" + String(geral);
+  dados += "&field5=" + String(nivel3);
 
   int codigoHTTP = http.POST(dados);
   String resposta = http.getString();
