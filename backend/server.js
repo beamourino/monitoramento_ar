@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const path = require('path');
 
 const app = express();
@@ -7,10 +8,22 @@ const PORT = process.env.PORT || 3000;
 const CHANNEL_ID = process.env.THINGSPEAK_CHANNEL_ID || '3577130';
 const READ_KEY = process.env.THINGSPEAK_READ_KEY;
 
+// Habilitar CORS para o frontend
+app.use(cors());
+
+// Servir arquivos estáticos do frontend (/web)
+app.use(express.static(path.join(__dirname, '../web')));
+
 const NIVEIS_MAP = {
   0: 'BOA',
   1: 'MODERADA',
   2: 'RUIM'
+};
+
+const CACHE_TTL_MS = 20 * 1000;
+let cache = {
+  data: null,
+  timestamp: 0
 };
 
 function parseNumber(val) {
@@ -84,17 +97,22 @@ async function fetchThingSpeakReadings() {
   return data.feeds;
 }
 
-// Servir arquivos estáticos do frontend (/web)
-app.use(express.static(path.join(__dirname, '../web')));
-
 // Rota de verificação de integridade
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Proxy para leituras do ThingSpeak com normalização
+// Proxy para leituras do ThingSpeak com normalização e cache em memória
 app.get('/api/readings', async (req, res) => {
   try {
+    const now = Date.now();
+    if (cache.data && (now - cache.timestamp < CACHE_TTL_MS)) {
+      return res.json({
+        ...cache.data,
+        cached: true
+      });
+    }
+
     const feeds = await fetchThingSpeakReadings();
     const history = feeds.map(normalizeFeed);
     history.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -107,9 +125,14 @@ app.get('/api/readings', async (req, res) => {
       history
     };
 
-    res.json(payload);
+    cache = {
+      data: payload,
+      timestamp: Date.now()
+    };
+
+    return res.json(payload);
   } catch (err) {
-    res.status(502).json({ error: 'Erro ao consultar o serviço ThingSpeak' });
+    return res.status(502).json({ error: 'Erro ao consultar o serviço ThingSpeak' });
   }
 });
 
@@ -119,4 +142,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, normalizeFeed, parseNumber };
+module.exports = { app, normalizeFeed, parseNumber, CACHE_TTL_MS };
