@@ -313,7 +313,10 @@ function clearWarning() {
 function renderAll() {
   renderConnectionMeta();
   renderMetricValues();
+  renderStatusBadges();
   renderChart();
+  renderHistory();
+  renderAlerts();
 }
 
 function renderConnectionMeta() {
@@ -511,4 +514,134 @@ function renderChart() {
   state.chart.data.datasets[1].data = history.map((reading) => reading.tvoc);
   state.chart.data.datasets[2].data = history.map((reading) => reading.mq135);
   state.chart.update('none');
+}
+
+function renderStatusBadges() {
+  const latest = state.latest;
+  if (!latest) {
+    setLevelBadge(elements.statusGeralBadge, 0, '--');
+    setAlertBadge(elements.alertaBadge, 0, '--');
+    elements.statusGeralDetail.textContent = 'Aguardando primeira leitura';
+    elements.alertaDetail.textContent = 'Aguardando primeira leitura';
+    return;
+  }
+  setLevelBadge(elements.statusGeralBadge, latest.nivel, latest.nivelNome);
+  setAlertBadge(elements.alertaBadge, latest.alerta);
+  elements.statusGeralDetail.textContent = `Nível ${latest.nivel} · ${latest.nivelNome}`;
+  elements.alertaDetail.textContent = latest.alerta === 1
+    ? `Disparado às ${formatDateTime(latest.timestamp)}`
+    : 'Nenhum alerta ativo na última leitura';
+}
+
+function setLevelBadge(element, nivel, label) {
+  element.className = 'level-badge';
+  element.dataset.level = String(nivel);
+  element.textContent = label || NIVEIS[nivel].nome;
+}
+
+function setAlertBadge(element, alerta, label) {
+  element.className = 'alert-badge';
+  element.dataset.alert = String(alerta === 1 ? 1 : 0);
+  element.textContent = label || (alerta === 1 ? 'ALERTA ATIVO' : 'NORMAL');
+}
+
+function createLevelBadge(nivel, nome) {
+  const badge = document.createElement('span');
+  setLevelBadge(badge, nivel, nome);
+  return badge;
+}
+
+function createAlertBadge(alerta) {
+  const badge = document.createElement('span');
+  setAlertBadge(badge, alerta);
+  return badge;
+}
+
+function createTextCell(text) {
+  const cell = document.createElement('td');
+  cell.textContent = text;
+  return cell;
+}
+
+function renderHistory() {
+  const history = state.history.slice(-30).reverse();
+  elements.historyBody.replaceChildren();
+  elements.historyCount.textContent = `${history.length} leitura${history.length === 1 ? '' : 's'}`;
+  if (!history.length) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 6;
+    cell.className = 'empty-row';
+    cell.textContent = 'Nenhuma leitura disponível.';
+    row.appendChild(cell);
+    elements.historyBody.appendChild(row);
+    return;
+  }
+  history.forEach((reading) => {
+    const row = document.createElement('tr');
+    row.appendChild(createTextCell(formatDateTime(reading.timestamp)));
+    row.appendChild(createTextCell(formatNumber(reading.eco2, 0)));
+    row.appendChild(createTextCell(formatNumber(reading.tvoc, 0)));
+    row.appendChild(createTextCell(formatNumber(reading.mq135, 3)));
+    const levelCell = document.createElement('td');
+    levelCell.appendChild(createLevelBadge(reading.nivel, reading.nivelNome));
+    row.appendChild(levelCell);
+    const alertCell = document.createElement('td');
+    alertCell.appendChild(createAlertBadge(reading.alerta));
+    row.appendChild(alertCell);
+    elements.historyBody.appendChild(row);
+  });
+}
+
+function isAlert(reading) {
+  return Boolean(reading && (reading.alerta === 1 || reading.nivel >= 1));
+}
+
+function renderAlerts() {
+  const recentAlerts = state.history.filter(isAlert);
+  const latest = state.latest;
+  const active = isAlert(latest);
+  const level = active ? latest.nivel : 0;
+  elements.alertBanner.dataset.level = String(level);
+  if (active) {
+    elements.alertBannerTitle.textContent = level === 2
+      ? 'Alerta crítico: qualidade do ar RUIM'
+      : 'Atenção: qualidade do ar MODERADA';
+    elements.alertBannerDetails.textContent = `Disparado às ${formatDateTime(latest.timestamp)} · eCO2 ${formatNumber(latest.eco2, 0)} ppm · TVOC ${formatNumber(latest.tvoc, 0)} ppb · MQ135 ${formatNumber(latest.mq135, 3)} V · field4=${latest.alerta}, field5=${latest.nivel}.`;
+    setLevelBadge(elements.alertBannerBadge, level, latest.nivelNome);
+  } else {
+    elements.alertBannerTitle.textContent = 'Sem alertas';
+    elements.alertBannerDetails.textContent = recentAlerts.length
+      ? `Nenhum alerta ativo na última leitura. ${recentAlerts.length} alerta(s) registrado(s) nas últimas 30 medições.`
+      : 'Todas as leituras recentes estão dentro do nível BOA.';
+    setLevelBadge(elements.alertBannerBadge, 0, 'BOA');
+  }
+  renderAlertList(recentAlerts);
+}
+
+function renderAlertList(alerts) {
+  elements.alertList.replaceChildren();
+  if (!alerts.length) {
+    const item = document.createElement('li');
+    item.className = 'alert-empty';
+    item.textContent = 'Nenhum alerta nas últimas 30 leituras.';
+    elements.alertList.appendChild(item);
+    return;
+  }
+  alerts.slice().reverse().forEach((reading) => {
+    const item = document.createElement('li');
+    item.className = 'alert-item';
+    const time = document.createElement('div');
+    time.className = 'alert-item-time';
+    time.textContent = formatDateTime(reading.timestamp);
+    const content = document.createElement('div');
+    const values = document.createElement('p');
+    values.className = 'alert-item-values';
+    values.textContent = `eCO2 ${formatNumber(reading.eco2, 0)} ppm · TVOC ${formatNumber(reading.tvoc, 0)} ppb · MQ135 ${formatNumber(reading.mq135, 3)} V · field4=${reading.alerta}, field5=${reading.nivel}`;
+    content.appendChild(values);
+    item.appendChild(time);
+    item.appendChild(content);
+    item.appendChild(createLevelBadge(reading.nivel, reading.nivelNome));
+    elements.alertList.appendChild(item);
+  });
 }
