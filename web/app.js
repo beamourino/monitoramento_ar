@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', init);
 function init() {
   cacheElements();
   setupTabs();
+  state.chart = createChart();
   refreshData();
   window.setInterval(refreshData, POLL_INTERVAL_MS);
   document.addEventListener('visibilitychange', () => {
@@ -312,6 +313,7 @@ function clearWarning() {
 function renderAll() {
   renderConnectionMeta();
   renderMetricValues();
+  renderChart();
 }
 
 function renderConnectionMeta() {
@@ -326,4 +328,187 @@ function renderMetricValues() {
   elements.eco2.textContent = formatNumber(state.latest && state.latest.eco2, 0);
   elements.tvoc.textContent = formatNumber(state.latest && state.latest.tvoc, 0);
   elements.mq135.textContent = formatNumber(state.latest && state.latest.mq135, 3);
+}
+
+function createChart() {
+  if (typeof Chart === 'undefined' || !elements.airChart) {
+    return null;
+  }
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.font.family = 'Inter, system-ui, -apple-system, sans-serif';
+  return new Chart(elements.airChart.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'eCO2',
+          data: [],
+          yAxisID: 'yECO2',
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56, 189, 248, 0.15)',
+          pointBackgroundColor: '#38bdf8',
+          pointBorderColor: '#0f172a',
+          pointBorderWidth: 2,
+          pointRadius: 2.5,
+          pointHoverRadius: 5,
+          borderWidth: 2,
+          tension: 0.35,
+          spanGaps: false,
+        },
+        {
+          label: 'TVOC',
+          data: [],
+          yAxisID: 'yTVOC',
+          borderColor: '#a78bfa',
+          backgroundColor: 'rgba(167, 139, 250, 0.15)',
+          pointBackgroundColor: '#a78bfa',
+          pointBorderColor: '#0f172a',
+          pointBorderWidth: 2,
+          pointRadius: 2.5,
+          pointHoverRadius: 5,
+          borderWidth: 2,
+          tension: 0.35,
+          spanGaps: false,
+        },
+        {
+          label: 'MQ135 (delta)',
+          data: [],
+          yAxisID: 'yMQ135',
+          borderColor: '#fbbf24',
+          backgroundColor: 'rgba(251, 191, 36, 0.15)',
+          pointBackgroundColor: '#fbbf24',
+          pointBorderColor: '#0f172a',
+          pointBorderWidth: 2,
+          pointRadius: 2.5,
+          pointHoverRadius: 5,
+          borderWidth: 2,
+          tension: 0.35,
+          spanGaps: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      animation: {
+        duration: 350,
+      },
+      plugins: {
+        legend: {
+          display: false,
+        },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          borderColor: 'rgba(148, 163, 184, 0.25)',
+          borderWidth: 1,
+          titleColor: '#f8fafc',
+          bodyColor: '#e2e8f0',
+          padding: 12,
+          callbacks: {
+            label: (context) => formatChartTooltip(context),
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: {
+            color: 'rgba(148, 163, 184, 0.08)',
+          },
+          border: {
+            display: false,
+          },
+          ticks: {
+            color: '#94a3b8',
+            maxTicksLimit: 8,
+          },
+        },
+        yECO2: {
+          type: 'linear',
+          position: 'left',
+          beginAtZero: true,
+          grace: '10%',
+          title: {
+            display: true,
+            text: 'eCO2 (ppm)',
+            color: '#38bdf8',
+          },
+          grid: {
+            color: 'rgba(148, 163, 184, 0.08)',
+          },
+          border: {
+            display: false,
+          },
+          ticks: {
+            color: '#38bdf8',
+            maxTicksLimit: 6,
+          },
+        },
+        yTVOC: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          grace: '10%',
+          title: {
+            display: true,
+            text: 'TVOC (ppb)',
+            color: '#a78bfa',
+          },
+          grid: {
+            drawOnChartArea: false,
+          },
+          border: {
+            display: false,
+          },
+          ticks: {
+            color: '#a78bfa',
+            maxTicksLimit: 6,
+          },
+        },
+        yMQ135: {
+          type: 'linear',
+          position: 'right',
+          display: false,
+          beginAtZero: true,
+          grace: '20%',
+          grid: {
+            drawOnChartArea: false,
+          },
+          border: {
+            display: false,
+          },
+          ticks: {
+            display: false,
+          },
+        },
+      },
+    },
+  });
+}
+
+function formatChartTooltip(context) {
+  const units = ['ppm', 'ppb', 'V'];
+  const digits = [0, 0, 3];
+  const index = context.datasetIndex;
+  const value = formatNumber(context.parsed.y, digits[index] || 0);
+  return ` ${context.dataset.label}: ${value} ${units[index] || ''}`;
+}
+
+function renderChart() {
+  const history = state.history.slice(-30);
+  if (elements.chartEmpty) {
+    elements.chartEmpty.hidden = history.length > 0 && Boolean(state.chart);
+  }
+  if (!state.chart) {
+    return;
+  }
+  state.chart.data.labels = history.map((reading) => formatTime(reading.timestamp));
+  state.chart.data.datasets[0].data = history.map((reading) => reading.eco2);
+  state.chart.data.datasets[1].data = history.map((reading) => reading.tvoc);
+  state.chart.data.datasets[2].data = history.map((reading) => reading.mq135);
+  state.chart.update('none');
 }
